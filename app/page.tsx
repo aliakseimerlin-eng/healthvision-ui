@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import heic2any from "heic2any";
 
 type Goal = "fat_loss" | "muscle_gain" | "recomposition" | "health";
 type Sex = "male" | "female";
@@ -60,6 +61,16 @@ const defaultForm: FormState = {
   trainingMode: "gym",
 };
 
+const MAX_FILE_SIZE_MB = 8;
+const SUPPORTED_IMAGE_TYPES = [
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+];
+
 function labelGoal(goal: Goal) {
   switch (goal) {
     case "fat_loss":
@@ -105,317 +116,248 @@ function buildWorkoutPlan(
   workoutsPerWeek: number,
   trainingMode: TrainingMode
 ): WorkoutDay[] {
-  const gymFatLoss: WorkoutDay[] = [
-    {
-      day: "Monday",
-      focus: "Full Body Strength A",
-      warmup: [
-        "5 min treadmill / bike",
-        "Hip mobility 2 min",
-        "2 warm-up sets before first compound lift",
-      ],
-      exercises: [
-        "Squat or Leg Press — 4 sets × 8–10 reps",
-        "Bench Press or Push-Ups — 4 sets × 8–12 reps",
-        "Seated Row or Dumbbell Row — 4 sets × 10–12 reps",
-        "Romanian Deadlift — 3 sets × 8–10 reps",
-        "Plank — 3 sets × 30–45 sec",
-      ],
-      rest: "60–90 sec between most sets, 90–120 sec on heavy compounds",
-      progression:
-        "When you complete all target reps with solid form, increase the load next session by 2.5–5 kg.",
-      substitutions: [
-        "Bench Press → Machine Press / Push-Ups",
-        "Squat → Leg Press / Goblet Squat",
-      ],
-    },
-    {
-      day: "Wednesday",
-      focus: "Full Body Strength B",
-      warmup: [
-        "5 min incline walk",
-        "Thoracic rotation and shoulder mobility",
-        "1–2 lighter ramp-up sets",
-      ],
-      exercises: [
-        "Deadlift or Trap Bar Deadlift — 3 sets × 5–6 reps",
-        "Shoulder Press — 3 sets × 8–10 reps",
-        "Lat Pulldown or Assisted Pull-Ups — 4 sets × 10–12 reps",
-        "Walking Lunges — 3 sets × 10 reps/leg",
-        "Cable Crunch or Leg Raises — 3 sets × 12–15 reps",
-        "20 min incline walk or bike",
-      ],
-      rest: "75–120 sec on compounds, 45–60 sec on abs",
-      progression:
-        "Add reps first inside the target range, then increase weight once top reps feel controlled.",
-      substitutions: [
-        "Deadlift → Romanian Deadlift / Back Extension",
-        "Lat Pulldown → Seated Row",
-      ],
-    },
-    {
-      day: "Friday",
-      focus: "Full Body + Conditioning",
-      warmup: [
-        "5 min bike or rower",
-        "Dynamic squat + hip hinge prep",
-      ],
-      exercises: [
-        "Goblet Squat — 3 sets × 12 reps",
-        "Incline Dumbbell Press — 3 sets × 10–12 reps",
-        "Chest-Supported Row — 3 sets × 10–12 reps",
-        "Kettlebell Swing or Hip Hinge — 3 sets × 12–15 reps",
-        "Farmer Carry — 3 rounds × 30–40 m",
-        "Conditioning: 15–20 min moderate cardio",
-      ],
-      rest: "45–75 sec on accessories, 60 sec between carries",
-      progression:
-        "Increase reps first, then load. Keep the conditioning moderate, not maximal.",
-      substitutions: [
-        "Farmer Carry → Treadmill incline walk",
-        "Swing → Romanian Deadlift light",
-      ],
-    },
-  ];
+  const gymPlans: Record<Goal, WorkoutDay[]> = {
+    fat_loss: [
+      {
+        day: "Monday",
+        focus: "Full Body Strength A",
+        warmup: ["5 min treadmill / bike", "Hip mobility", "2 warm-up sets"],
+        exercises: [
+          "Squat or Leg Press — 4 × 8–10",
+          "Bench Press or Push-Ups — 4 × 8–12",
+          "Seated Row — 4 × 10–12",
+          "Romanian Deadlift — 3 × 8–10",
+          "Plank — 3 × 30–45 sec",
+        ],
+        rest: "60–90 sec",
+        progression: "Complete all reps with good form → add 2.5–5 kg next session.",
+        substitutions: ["Bench Press → Machine Press", "Squat → Goblet Squat"],
+      },
+      {
+        day: "Wednesday",
+        focus: "Full Body Strength B",
+        warmup: ["5 min incline walk", "Shoulder mobility", "1–2 ramp-up sets"],
+        exercises: [
+          "Deadlift or Trap Bar Deadlift — 3 × 5–6",
+          "Shoulder Press — 3 × 8–10",
+          "Lat Pulldown — 4 × 10–12",
+          "Walking Lunges — 3 × 10 / leg",
+          "Cable Crunch — 3 × 12–15",
+          "20 min incline walk or bike",
+        ],
+        rest: "75–120 sec",
+        progression: "Add reps first, then weight.",
+        substitutions: ["Deadlift → Romanian Deadlift", "Lat Pulldown → Seated Row"],
+      },
+      {
+        day: "Friday",
+        focus: "Full Body + Conditioning",
+        warmup: ["5 min bike", "Dynamic squat + hinge prep"],
+        exercises: [
+          "Goblet Squat — 3 × 12",
+          "Incline Dumbbell Press — 3 × 10–12",
+          "Chest-Supported Row — 3 × 10–12",
+          "Kettlebell Swing — 3 × 12–15",
+          "Farmer Carry — 3 rounds",
+          "Conditioning — 15–20 min",
+        ],
+        rest: "45–75 sec",
+        progression: "Increase reps first, then load.",
+        substitutions: ["Farmer Carry → incline walk", "Swing → light RDL"],
+      },
+    ],
+    muscle_gain: [
+      {
+        day: "Monday",
+        focus: "Upper Body",
+        warmup: ["5 min cardio", "Band warm-up", "2 warm-up sets"],
+        exercises: [
+          "Bench Press — 4 × 6–8",
+          "Incline Dumbbell Press — 3 × 8–10",
+          "Seated Row — 4 × 8–10",
+          "Lat Pulldown — 3 × 10–12",
+          "Lateral Raises — 3 × 12–15",
+          "Biceps + Triceps — 3 × 12",
+        ],
+        rest: "60–90 sec",
+        progression: "Hit top reps → add load.",
+        substitutions: ["Bench Press → Machine Chest Press", "Lat Pulldown → Assisted Pull-Up"],
+      },
+      {
+        day: "Wednesday",
+        focus: "Lower Body",
+        warmup: ["5 min bike", "Hip + ankle mobility"],
+        exercises: [
+          "Squat or Hack Squat — 4 × 6–8",
+          "Romanian Deadlift — 4 × 8–10",
+          "Leg Press — 3 × 10–12",
+          "Hamstring Curl — 3 × 12",
+          "Calf Raises — 4 × 12–15",
+          "Hanging Knee Raises — 3 × 12",
+        ],
+        rest: "75–120 sec",
+        progression: "Add weight only when reps stay clean.",
+        substitutions: ["Hack Squat → Leg Press", "RDL → Dumbbell RDL"],
+      },
+      {
+        day: "Friday",
+        focus: "Upper / Full Body Pump",
+        warmup: ["5 min rower", "Band pull-aparts"],
+        exercises: [
+          "Incline Press — 4 × 8–10",
+          "Machine Row — 4 × 10–12",
+          "Shoulder Press — 3 × 8–10",
+          "Cable Fly — 3 × 12–15",
+          "Rear Delt Fly — 3 × 12–15",
+          "Arms Finisher — 2–3 rounds",
+        ],
+        rest: "60–90 sec",
+        progression: "Add reps before load.",
+        substitutions: ["Cable Fly → Dumbbell Fly", "Machine Row → Chest-Supported Row"],
+      },
+    ],
+    recomposition: [
+      {
+        day: "Monday",
+        focus: "Strength Base",
+        warmup: ["5 min cardio", "Hip mobility"],
+        exercises: [
+          "Squat — 4 × 6–8",
+          "Bench Press — 4 × 6–8",
+          "Row — 4 × 8–10",
+          "Romanian Deadlift — 3 × 8",
+          "Plank — 3 × 40 sec",
+        ],
+        rest: "75–120 sec",
+        progression: "Slow steady progression, 1–2 reps in reserve.",
+        substitutions: ["Bench Press → Machine Press", "Row → Cable Row"],
+      },
+      {
+        day: "Wednesday",
+        focus: "Hypertrophy + Cardio",
+        warmup: ["5 min bike", "Shoulder + hip prep"],
+        exercises: [
+          "Leg Press — 3 × 10–12",
+          "Incline Dumbbell Press — 3 × 10–12",
+          "Lat Pulldown — 3 × 10–12",
+          "Lateral Raises — 3 × 15",
+          "Bike / treadmill — 20 min",
+        ],
+        rest: "45–75 sec",
+        progression: "Improve reps and control first.",
+        substitutions: ["Leg Press → Goblet Squat", "Lat Pulldown → Seated Row"],
+      },
+      {
+        day: "Friday",
+        focus: "Full Body",
+        warmup: ["5 min incline walk", "Dynamic prep"],
+        exercises: [
+          "Deadlift — 3 × 5",
+          "Push-Ups / Assisted Dips — 3 × 10–12",
+          "Chest Supported Row — 3 × 10",
+          "Walking Lunges — 3 × 10 / leg",
+          "Cable Crunch — 3 × 15",
+        ],
+        rest: "60–90 sec",
+        progression: "Add load gradually without breaking form.",
+        substitutions: ["Deadlift → Romanian Deadlift", "Dips → Push-Ups"],
+      },
+    ],
+    health: [
+      {
+        day: "Monday",
+        focus: "Full Body Strength",
+        warmup: ["5 min treadmill", "Joint mobility"],
+        exercises: [
+          "Goblet Squat — 3 × 10",
+          "Push-Ups — 3 × 8–12",
+          "Cable Row — 3 × 10",
+          "Romanian Deadlift — 3 × 10",
+          "Plank — 3 × 30 sec",
+        ],
+        rest: "45–75 sec",
+        progression: "Increase reps before weight.",
+        substitutions: ["Push-Ups → Machine Chest Press", "Goblet Squat → Leg Press"],
+      },
+      {
+        day: "Wednesday",
+        focus: "Mobility + Cardio",
+        warmup: ["Easy walk 5 min"],
+        exercises: [
+          "Mobility flow — 10–15 min",
+          "Walking / bike — 25–35 min",
+          "Split Squat — 3 × 10 / leg",
+          "Band Pull Aparts — 3 × 15",
+          "Breathing — 5 min",
+        ],
+        rest: "30–45 sec",
+        progression: "Increase total movement time.",
+        substitutions: ["Bike → incline walk", "Split Squat → Step-Ups"],
+      },
+      {
+        day: "Friday",
+        focus: "Strength + Conditioning",
+        warmup: ["5 min bike", "Basic mobility"],
+        exercises: [
+          "Leg Press or Squat — 3 × 8–10",
+          "Shoulder Press — 3 × 8–10",
+          "Lat Pulldown — 3 × 10–12",
+          "Farmer Carry — 3 rounds",
+          "Incline walk — 15–20 min",
+        ],
+        rest: "60–75 sec",
+        progression: "Keep recovery easy and consistent.",
+        substitutions: ["Farmer Carry → incline walk", "Lat Pulldown → Seated Row"],
+      },
+    ],
+  };
 
-  const gymMuscle: WorkoutDay[] = [
-    {
-      day: "Monday",
-      focus: "Upper Body",
-      warmup: ["5 min cardio", "Band shoulder warm-up", "2 warm-up sets first press"],
-      exercises: [
-        "Bench Press — 4 sets × 6–8 reps",
-        "Incline Dumbbell Press — 3 sets × 8–10 reps",
-        "Seated Row — 4 sets × 8–10 reps",
-        "Lat Pulldown — 3 sets × 10–12 reps",
-        "Lateral Raises — 3 sets × 12–15 reps",
-        "Biceps Curl + Triceps Pushdown — 3 sets × 12 reps each",
-      ],
-      rest: "90 sec on main lifts, 45–60 sec on isolation",
-      progression:
-        "Push for more reps week to week, then raise load once all sets hit upper rep target.",
-      substitutions: [
-        "Bench Press → Machine Chest Press",
-        "Lat Pulldown → Assisted Pull-Up",
-      ],
-    },
-    {
-      day: "Wednesday",
-      focus: "Lower Body",
-      warmup: ["5 min bike", "Hip and ankle mobility", "2 ramp-up sets"],
-      exercises: [
-        "Squat or Hack Squat — 4 sets × 6–8 reps",
-        "Romanian Deadlift — 4 sets × 8–10 reps",
-        "Leg Press — 3 sets × 10–12 reps",
-        "Hamstring Curl — 3 sets × 12 reps",
-        "Calf Raises — 4 sets × 12–15 reps",
-        "Hanging Knee Raises — 3 sets × 12 reps",
-      ],
-      rest: "90–120 sec on squats/RDL, 45–60 sec on accessories",
-      progression:
-        "Prioritize form and depth. Add load only when all reps are consistent.",
-      substitutions: [
-        "Hack Squat → Leg Press",
-        "Romanian Deadlift → Dumbbell RDL",
-      ],
-    },
-    {
-      day: "Friday",
-      focus: "Upper / Full Body Pump",
-      warmup: ["5 min rower", "Band pull-aparts", "1 lighter first set per main movement"],
-      exercises: [
-        "Incline Press — 4 sets × 8–10 reps",
-        "Machine Row — 4 sets × 10–12 reps",
-        "Shoulder Press — 3 sets × 8–10 reps",
-        "Cable Fly — 3 sets × 12–15 reps",
-        "Rear Delt Fly — 3 sets × 12–15 reps",
-        "Arms Finisher — 2–3 rounds",
-      ],
-      rest: "60–90 sec",
-      progression:
-        "Use controlled tempo, chase good contractions, and add reps before load.",
-      substitutions: [
-        "Cable Fly → Dumbbell Fly",
-        "Machine Row → Chest-Supported Row",
-      ],
-    },
-  ];
-
-  const gymRecomp: WorkoutDay[] = [
-    {
-      day: "Monday",
-      focus: "Strength Base",
-      warmup: ["5 min cardio", "Hip mobility", "2 warm-up sets"],
-      exercises: [
-        "Squat — 4 sets × 6–8 reps",
-        "Bench Press — 4 sets × 6–8 reps",
-        "Row — 4 sets × 8–10 reps",
-        "Romanian Deadlift — 3 sets × 8 reps",
-        "Plank — 3 sets × 40 sec",
-      ],
-      rest: "75–120 sec",
-      progression:
-        "Progress slowly but steadily. Keep 1–2 reps in reserve on main lifts.",
-      substitutions: [
-        "Bench Press → Push-Ups weighted / Machine Press",
-        "Row → Cable Row",
-      ],
-    },
-    {
-      day: "Wednesday",
-      focus: "Hypertrophy + Cardio",
-      warmup: ["5 min bike", "Shoulder + hip prep"],
-      exercises: [
-        "Leg Press — 3 sets × 10–12 reps",
-        "Incline Dumbbell Press — 3 sets × 10–12 reps",
-        "Lat Pulldown — 3 sets × 10–12 reps",
-        "Lateral Raises — 3 sets × 15 reps",
-        "Bike or treadmill — 20 min moderate pace",
-      ],
-      rest: "45–75 sec",
-      progression:
-        "Add reps and improve movement quality before increasing weight.",
-      substitutions: [
-        "Leg Press → Goblet Squat",
-        "Lat Pulldown → Seated Row",
-      ],
-    },
-    {
-      day: "Friday",
-      focus: "Full Body",
-      warmup: ["5 min incline walk", "Dynamic movement prep"],
-      exercises: [
-        "Deadlift — 3 sets × 5 reps",
-        "Push-Ups or Assisted Dips — 3 sets × 10–12 reps",
-        "Chest Supported Row — 3 sets × 10 reps",
-        "Walking Lunges — 3 sets × 10 reps/leg",
-        "Cable Crunch — 3 sets × 15 reps",
-      ],
-      rest: "60–90 sec",
-      progression:
-        "Keep execution sharp. Add load gradually without compromising form.",
-      substitutions: [
-        "Deadlift → Romanian Deadlift",
-        "Dips → Push-Ups",
-      ],
-    },
-  ];
-
-  const gymHealth: WorkoutDay[] = [
-    {
-      day: "Monday",
-      focus: "Full Body Strength",
-      warmup: ["5 min treadmill", "Joint mobility 5 min"],
-      exercises: [
-        "Goblet Squat — 3 sets × 10 reps",
-        "Push-Ups — 3 sets × 8–12 reps",
-        "Row Machine or Cable Row — 3 sets × 10 reps",
-        "Romanian Deadlift — 3 sets × 10 reps",
-        "Plank — 3 sets × 30 sec",
-      ],
-      rest: "45–75 sec",
-      progression:
-        "Build smooth consistency first. Increase reps before weight.",
-      substitutions: [
-        "Push-Ups → Machine Chest Press",
-        "Goblet Squat → Leg Press",
-      ],
-    },
-    {
-      day: "Wednesday",
-      focus: "Mobility + Cardio",
-      warmup: ["Light walk 5 min"],
-      exercises: [
-        "Mobility flow — 10–15 min",
-        "Walking or bike — 25–35 min",
-        "Bodyweight Split Squat — 3 sets × 10 reps/leg",
-        "Band Pull Aparts — 3 sets × 15 reps",
-        "Breathing / cool-down — 5 min",
-      ],
-      rest: "30–45 sec",
-      progression:
-        "Increase total time and quality of movement before intensity.",
-      substitutions: [
-        "Bike → Incline walk",
-        "Split Squat → Step-Ups",
-      ],
-    },
-    {
-      day: "Friday",
-      focus: "Strength + Conditioning",
-      warmup: ["5 min bike", "Basic mobility"],
-      exercises: [
-        "Leg Press or Squat — 3 sets × 8–10 reps",
-        "Shoulder Press — 3 sets × 8–10 reps",
-        "Lat Pulldown — 3 sets × 10–12 reps",
-        "Farmer Carry — 3 rounds",
-        "Treadmill incline walk — 15–20 min",
-      ],
-      rest: "60–75 sec",
-      progression:
-        "Aim for easier recovery and repeatability, not maximal fatigue.",
-      substitutions: [
-        "Farmer Carry → Sled push / incline walk",
-        "Lat Pulldown → Seated Row",
-      ],
-    },
-  ];
-
-  const homeBase: Record<Goal, WorkoutDay[]> = {
+  const homePlans: Record<Goal, WorkoutDay[]> = {
     fat_loss: [
       {
         day: "Monday",
         focus: "Home Full Body A",
-        warmup: ["March in place 2–3 min", "Hip circles", "Arm swings"],
+        warmup: ["March in place", "Hip circles", "Arm swings"],
         exercises: [
-          "Bodyweight Squat — 4 sets × 12–15 reps",
-          "Push-Ups (or knees) — 4 sets × 8–12 reps",
-          "Glute Bridge — 4 sets × 12–15 reps",
-          "Chair Row / Backpack Row — 3 sets × 10–12 reps",
-          "Plank — 3 sets × 30–45 sec",
+          "Bodyweight Squat — 4 × 12–15",
+          "Push-Ups — 4 × 8–12",
+          "Glute Bridge — 4 × 12–15",
+          "Backpack Row — 3 × 10–12",
+          "Plank — 3 × 30–45 sec",
         ],
         rest: "45–60 sec",
-        progression: "Add reps first, then add backpack resistance.",
-        substitutions: [
-          "Push-Ups → Incline Push-Ups",
-          "Backpack Row → Band Row",
-        ],
+        progression: "Add reps first, then backpack load.",
+        substitutions: ["Push-Ups → Incline Push-Ups", "Backpack Row → Band Row"],
       },
       {
         day: "Wednesday",
         focus: "Home Full Body B",
         warmup: ["Walk 3 min", "Dynamic lunges", "Shoulder rolls"],
         exercises: [
-          "Reverse Lunges — 3 sets × 10 reps/leg",
-          "Pike Push-Ups — 3 sets × 8–10 reps",
-          "Single-Leg Glute Bridge — 3 sets × 10 reps/leg",
-          "Band Pull Aparts / Towel Row — 3 sets × 15 reps",
-          "Mountain Climbers — 3 sets × 30 sec",
+          "Reverse Lunges — 3 × 10 / leg",
+          "Pike Push-Ups — 3 × 8–10",
+          "Single-Leg Glute Bridge — 3 × 10 / leg",
+          "Band Pull Aparts — 3 × 15",
+          "Mountain Climbers — 3 × 30 sec",
         ],
         rest: "45–60 sec",
-        progression: "Increase reps or tempo difficulty.",
-        substitutions: [
-          "Pike Push-Ups → Shoulder Press with bands",
-          "Mountain Climbers → Step Jacks",
-        ],
+        progression: "Increase reps or harder tempo.",
+        substitutions: ["Pike Push-Ups → Band Shoulder Press", "Mountain Climbers → Step Jacks"],
       },
       {
         day: "Friday",
         focus: "Home Conditioning",
-        warmup: ["Walk in place", "Mobility flow 5 min"],
+        warmup: ["Walk in place", "Mobility flow"],
         exercises: [
-          "Squat to Reach — 3 sets × 15 reps",
-          "Push-Up Variation — 3 sets × 10 reps",
-          "Split Squat — 3 sets × 10 reps/leg",
-          "Band Row / Backpack Row — 3 sets × 12 reps",
-          "Low-impact cardio circuit — 15–20 min",
+          "Squat to Reach — 3 × 15",
+          "Push-Up Variation — 3 × 10",
+          "Split Squat — 3 × 10 / leg",
+          "Band Row / Backpack Row — 3 × 12",
+          "Low-impact cardio — 15–20 min",
         ],
         rest: "30–45 sec",
-        progression: "Reduce rest or add reps over time.",
-        substitutions: [
-          "Split Squat → Step-Ups",
-          "Cardio circuit → brisk walk",
-        ],
+        progression: "Reduce rest or add reps.",
+        substitutions: ["Split Squat → Step-Ups", "Cardio circuit → brisk walk"],
       },
     ],
     muscle_gain: [
@@ -424,54 +366,45 @@ function buildWorkoutPlan(
         focus: "Home Upper",
         warmup: ["Arm circles", "Band pull-aparts", "Push-up warm-up"],
         exercises: [
-          "Push-Ups / Weighted Push-Ups — 4 sets × 8–12 reps",
-          "Backpack Row — 4 sets × 10–12 reps",
-          "Chair Dips — 3 sets × 10–12 reps",
-          "Band Lateral Raise — 3 sets × 15 reps",
-          "Backpack Curl — 3 sets × 12 reps",
+          "Push-Ups / Weighted Push-Ups — 4 × 8–12",
+          "Backpack Row — 4 × 10–12",
+          "Chair Dips — 3 × 10–12",
+          "Band Lateral Raise — 3 × 15",
+          "Backpack Curl — 3 × 12",
         ],
         rest: "45–75 sec",
-        progression: "Add backpack load or slow tempo.",
-        substitutions: [
-          "Chair Dips → Close-Grip Push-Ups",
-          "Backpack Row → Band Row",
-        ],
+        progression: "Add backpack load or slower tempo.",
+        substitutions: ["Chair Dips → Close-Grip Push-Ups", "Backpack Row → Band Row"],
       },
       {
         day: "Wednesday",
         focus: "Home Lower",
-        warmup: ["Leg swings", "Hip mobility", "2 light squat sets"],
+        warmup: ["Leg swings", "Hip mobility"],
         exercises: [
-          "Bulgarian Split Squat — 4 sets × 8–10 reps/leg",
-          "Backpack Romanian Deadlift — 4 sets × 10 reps",
-          "Step-Ups — 3 sets × 10 reps/leg",
-          "Glute Bridge — 3 sets × 15 reps",
-          "Calf Raises — 4 sets × 15–20 reps",
+          "Bulgarian Split Squat — 4 × 8–10 / leg",
+          "Backpack Romanian Deadlift — 4 × 10",
+          "Step-Ups — 3 × 10 / leg",
+          "Glute Bridge — 3 × 15",
+          "Calf Raises — 4 × 15–20",
         ],
         rest: "60–75 sec",
-        progression: "Increase load with backpack or extra reps.",
-        substitutions: [
-          "Step-Ups → Reverse Lunges",
-          "RDL → Single-Leg RDL",
-        ],
+        progression: "Increase load or reps.",
+        substitutions: ["Step-Ups → Reverse Lunges", "RDL → Single-Leg RDL"],
       },
       {
         day: "Friday",
         focus: "Home Full Body Pump",
         warmup: ["Walk 3 min", "Shoulder + hip prep"],
         exercises: [
-          "Incline or Decline Push-Ups — 3 sets × 10–15 reps",
-          "Backpack Row — 3 sets × 12 reps",
-          "Goblet Squat with Backpack — 3 sets × 12 reps",
-          "Band Shoulder Press — 3 sets × 10 reps",
-          "Arms Finisher — 2 rounds × 12–15 reps",
+          "Incline / Decline Push-Ups — 3 × 10–15",
+          "Backpack Row — 3 × 12",
+          "Goblet Squat with Backpack — 3 × 12",
+          "Band Shoulder Press — 3 × 10",
+          "Arms Finisher — 2 rounds",
         ],
         rest: "45–60 sec",
-        progression: "Add reps and density first.",
-        substitutions: [
-          "Band Shoulder Press → Pike Push-Ups",
-          "Goblet Squat → Split Squat",
-        ],
+        progression: "Add reps and density.",
+        substitutions: ["Band Shoulder Press → Pike Push-Ups", "Goblet Squat → Split Squat"],
       },
     ],
     recomposition: [
@@ -480,54 +413,45 @@ function buildWorkoutPlan(
         focus: "Home Strength Base",
         warmup: ["Walk 3 min", "Mobility 3–5 min"],
         exercises: [
-          "Backpack Squat — 4 sets × 8–10 reps",
-          "Push-Ups — 4 sets × 8–12 reps",
-          "Backpack Row — 4 sets × 10 reps",
-          "Romanian Deadlift with Backpack — 3 sets × 10 reps",
-          "Plank — 3 sets × 40 sec",
+          "Backpack Squat — 4 × 8–10",
+          "Push-Ups — 4 × 8–12",
+          "Backpack Row — 4 × 10",
+          "Backpack RDL — 3 × 10",
+          "Plank — 3 × 40 sec",
         ],
         rest: "60 sec",
-        progression: "Progress reps, then add backpack load.",
-        substitutions: [
-          "Backpack Squat → Split Squat",
-          "Backpack Row → Band Row",
-        ],
+        progression: "Progress reps, then load.",
+        substitutions: ["Backpack Squat → Split Squat", "Backpack Row → Band Row"],
       },
       {
         day: "Wednesday",
         focus: "Home Hypertrophy + Cardio",
         warmup: ["Dynamic warm-up 5 min"],
         exercises: [
-          "Reverse Lunges — 3 sets × 10 reps/leg",
-          "Incline Push-Ups — 3 sets × 12 reps",
-          "Band Row — 3 sets × 12 reps",
-          "Band Lateral Raise — 3 sets × 15 reps",
+          "Reverse Lunges — 3 × 10 / leg",
+          "Incline Push-Ups — 3 × 12",
+          "Band Row — 3 × 12",
+          "Band Lateral Raise — 3 × 15",
           "Brisk walk / bike — 20 min",
         ],
         rest: "45–60 sec",
-        progression: "Add reps and reduce rest gradually.",
-        substitutions: [
-          "Incline Push-Ups → Standard Push-Ups",
-          "Brisk walk → step circuit",
-        ],
+        progression: "Add reps and reduce rest.",
+        substitutions: ["Incline Push-Ups → Standard Push-Ups", "Walk → step circuit"],
       },
       {
         day: "Friday",
         focus: "Home Full Body",
         warmup: ["Walk 3 min", "Joint prep"],
         exercises: [
-          "Goblet Squat with Backpack — 3 sets × 12 reps",
-          "Push-Ups — 3 sets × 10–12 reps",
-          "Backpack Row — 3 sets × 10–12 reps",
-          "Split Squat — 3 sets × 10 reps/leg",
-          "Leg Raise / Crunch — 3 sets × 15 reps",
+          "Goblet Squat with Backpack — 3 × 12",
+          "Push-Ups — 3 × 10–12",
+          "Backpack Row — 3 × 10–12",
+          "Split Squat — 3 × 10 / leg",
+          "Leg Raise / Crunch — 3 × 15",
         ],
         rest: "45–60 sec",
-        progression: "Add one rep to each set before increasing load.",
-        substitutions: [
-          "Split Squat → Step-Ups",
-          "Crunch → Dead Bug",
-        ],
+        progression: "Add one rep to each set before more load.",
+        substitutions: ["Split Squat → Step-Ups", "Crunch → Dead Bug"],
       },
     ],
     health: [
@@ -536,18 +460,15 @@ function buildWorkoutPlan(
         focus: "Home Full Body",
         warmup: ["Walk 3 min", "Mobility 5 min"],
         exercises: [
-          "Bodyweight Squat — 3 sets × 10 reps",
-          "Incline Push-Ups — 3 sets × 8–10 reps",
-          "Band Row / Towel Row — 3 sets × 10 reps",
-          "Glute Bridge — 3 sets × 12 reps",
-          "Plank — 3 sets × 20–30 sec",
+          "Bodyweight Squat — 3 × 10",
+          "Incline Push-Ups — 3 × 8–10",
+          "Band Row / Towel Row — 3 × 10",
+          "Glute Bridge — 3 × 12",
+          "Plank — 3 × 20–30 sec",
         ],
         rest: "45 sec",
-        progression: "Build consistency first, then increase reps.",
-        substitutions: [
-          "Incline Push-Ups → Wall Push-Ups",
-          "Band Row → Backpack Row",
-        ],
+        progression: "Build consistency first.",
+        substitutions: ["Incline Push-Ups → Wall Push-Ups", "Band Row → Backpack Row"],
       },
       {
         day: "Wednesday",
@@ -556,56 +477,47 @@ function buildWorkoutPlan(
         exercises: [
           "Mobility flow — 10 min",
           "Brisk walk — 25–35 min",
-          "Step-Ups — 3 sets × 10 reps/leg",
-          "Band Pull Aparts — 3 sets × 15 reps",
+          "Step-Ups — 3 × 10 / leg",
+          "Band Pull Aparts — 3 × 15",
         ],
         rest: "30–45 sec",
-        progression: "Increase total movement time gradually.",
-        substitutions: [
-          "Brisk walk → stationary bike",
-          "Step-Ups → split squat hold",
-        ],
+        progression: "Increase total movement time.",
+        substitutions: ["Walk → stationary bike", "Step-Ups → split squat hold"],
       },
       {
         day: "Friday",
         focus: "Strength + Conditioning",
         warmup: ["Walk 3 min", "Joint prep"],
         exercises: [
-          "Backpack Squat — 3 sets × 10 reps",
-          "Push-Ups — 3 sets × 8–10 reps",
-          "Backpack Row — 3 sets × 10 reps",
+          "Backpack Squat — 3 × 10",
+          "Push-Ups — 3 × 8–10",
+          "Backpack Row — 3 × 10",
           "Farmer Carry with bags — 3 rounds",
           "Walk — 15 min",
         ],
         rest: "45–60 sec",
-        progression: "Keep training easy enough to repeat weekly.",
-        substitutions: [
-          "Farmer Carry → incline walk",
-          "Push-Ups → incline push-ups",
-        ],
+        progression: "Keep it easy enough to repeat weekly.",
+        substitutions: ["Farmer Carry → incline walk", "Push-Ups → incline push-ups"],
       },
     ],
   };
 
-  const outdoorBase: Record<Goal, WorkoutDay[]> = {
+  const outdoorPlans: Record<Goal, WorkoutDay[]> = {
     fat_loss: [
       {
         day: "Monday",
         focus: "Outdoor Strength Circuit",
         warmup: ["Walk 5 min", "Mobility 5 min"],
         exercises: [
-          "Bench Step-Ups — 3 sets × 12 reps/leg",
-          "Incline Push-Ups on bench — 4 sets × 10–12 reps",
-          "Walking Lunges — 3 sets × 12 reps/leg",
+          "Bench Step-Ups — 3 × 12 / leg",
+          "Incline Push-Ups on bench — 4 × 10–12",
+          "Walking Lunges — 3 × 12 / leg",
           "Pull-Up Bar Hangs / Assisted Pulls — 3 sets",
           "Brisk walk — 15 min",
         ],
         rest: "45–60 sec",
-        progression: "Add reps or rounds before intensity.",
-        substitutions: [
-          "Incline Push-Ups → wall push-ups",
-          "Lunges → bodyweight squats",
-        ],
+        progression: "Add reps or rounds before more intensity.",
+        substitutions: ["Incline Push-Ups → wall push-ups", "Lunges → bodyweight squats"],
       },
       {
         day: "Wednesday",
@@ -613,34 +525,28 @@ function buildWorkoutPlan(
         warmup: ["Walk 5 min"],
         exercises: [
           "Fast walk / easy jog — 25–35 min",
-          "Plank — 3 sets × 30–40 sec",
-          "Bench knee raises — 3 sets × 15 reps",
+          "Plank — 3 × 30–40 sec",
+          "Bench knee raises — 3 × 15",
           "Stair climb intervals — 6 rounds",
         ],
-        rest: "As needed between intervals",
-        progression: "Increase interval count or pace gradually.",
-        substitutions: [
-          "Jog → brisk walk",
-          "Stairs → hill walk",
-        ],
+        rest: "As needed",
+        progression: "Increase pace or interval count gradually.",
+        substitutions: ["Jog → brisk walk", "Stairs → hill walk"],
       },
       {
         day: "Friday",
         focus: "Outdoor Mixed Session",
         warmup: ["Walk 5 min", "Mobility"],
         exercises: [
-          "Bodyweight Squat — 3 sets × 15 reps",
-          "Push-Ups — 3 sets × 10 reps",
-          "Walking Lunges — 3 sets × 10 reps/leg",
+          "Bodyweight Squat — 3 × 15",
+          "Push-Ups — 3 × 10",
+          "Walking Lunges — 3 × 10 / leg",
           "Hill walk — 15–20 min",
-          "Carry backpack walk — 10 min",
+          "Backpack carry walk — 10 min",
         ],
         rest: "30–45 sec",
         progression: "Add time and reps gradually.",
-        substitutions: [
-          "Hill walk → flat brisk walk",
-          "Push-Ups → incline push-ups",
-        ],
+        substitutions: ["Hill walk → flat brisk walk", "Push-Ups → incline push-ups"],
       },
     ],
     muscle_gain: [
@@ -649,54 +555,45 @@ function buildWorkoutPlan(
         focus: "Outdoor Upper Body",
         warmup: ["Arm circles", "Band warm-up if available"],
         exercises: [
-          "Push-Ups — 4 sets × 10–15 reps",
-          "Dips on bars / bench — 3 sets × 8–12 reps",
+          "Push-Ups — 4 × 10–15",
+          "Dips on bars / bench — 3 × 8–12",
           "Pull-Ups / Assisted Pull-Ups — 4 sets",
-          "Backpack Curl — 3 sets × 12 reps",
-          "Band Lateral Raise — 3 sets × 15 reps",
+          "Backpack Curl — 3 × 12",
+          "Band Lateral Raise — 3 × 15",
         ],
         rest: "60–90 sec",
-        progression: "Add reps and then backpack resistance.",
-        substitutions: [
-          "Pull-Ups → inverted rows",
-          "Dips → close-grip push-ups",
-        ],
+        progression: "Add reps, then backpack resistance.",
+        substitutions: ["Pull-Ups → inverted rows", "Dips → close-grip push-ups"],
       },
       {
         day: "Wednesday",
         focus: "Outdoor Lower Body",
         warmup: ["Walk 5 min", "Leg swings"],
         exercises: [
-          "Bulgarian Split Squat on bench — 4 sets × 8–10 reps/leg",
-          "Walking Lunges — 4 sets × 12 reps/leg",
-          "Backpack Romanian Deadlift — 4 sets × 10 reps",
-          "Calf Raises — 4 sets × 20 reps",
+          "Bulgarian Split Squat on bench — 4 × 8–10 / leg",
+          "Walking Lunges — 4 × 12 / leg",
+          "Backpack Romanian Deadlift — 4 × 10",
+          "Calf Raises — 4 × 20",
           "Hill walk — 10–15 min",
         ],
         rest: "60–75 sec",
         progression: "Increase backpack load or total reps.",
-        substitutions: [
-          "Bulgarian Split Squat → Step-Ups",
-          "Hill walk → flat brisk walk",
-        ],
+        substitutions: ["Bulgarian Split Squat → Step-Ups", "Hill walk → flat brisk walk"],
       },
       {
         day: "Friday",
         focus: "Outdoor Full Body Pump",
         warmup: ["Walk 5 min", "Mobility"],
         exercises: [
-          "Push-Ups — 3 sets × 12 reps",
+          "Push-Ups — 3 × 12",
           "Pull-Up variation — 3 sets",
-          "Bodyweight Squat — 3 sets × 15 reps",
-          "Bench Dips — 3 sets × 12 reps",
+          "Bodyweight Squat — 3 × 15",
+          "Bench Dips — 3 × 12",
           "Carry backpack walk — 10 min",
         ],
         rest: "45–60 sec",
         progression: "Increase density and total work.",
-        substitutions: [
-          "Pull-Up variation → inverted row",
-          "Bench dips → push-ups",
-        ],
+        substitutions: ["Pull-Up variation → inverted row", "Bench Dips → push-ups"],
       },
     ],
     recomposition: [
@@ -705,18 +602,15 @@ function buildWorkoutPlan(
         focus: "Outdoor Strength Base",
         warmup: ["Walk 5 min", "Mobility"],
         exercises: [
-          "Bench Step-Ups — 4 sets × 10 reps/leg",
-          "Push-Ups — 4 sets × 10 reps",
+          "Bench Step-Ups — 4 × 10 / leg",
+          "Push-Ups — 4 × 10",
           "Pull-Ups / Assisted Rows — 4 sets",
-          "Walking Lunges — 3 sets × 10 reps/leg",
-          "Plank — 3 sets × 40 sec",
+          "Walking Lunges — 3 × 10 / leg",
+          "Plank — 3 × 40 sec",
         ],
         rest: "60 sec",
         progression: "Add reps or harder variations gradually.",
-        substitutions: [
-          "Pull-Ups → inverted rows",
-          "Step-Ups → bodyweight squats",
-        ],
+        substitutions: ["Pull-Ups → inverted rows", "Step-Ups → bodyweight squats"],
       },
       {
         day: "Wednesday",
@@ -724,35 +618,29 @@ function buildWorkoutPlan(
         warmup: ["Walk 5 min"],
         exercises: [
           "Fast walk / jog — 20 min",
-          "Push-Ups — 3 sets × 12 reps",
-          "Bodyweight Squat — 3 sets × 15 reps",
-          "Band Row / Inverted Row — 3 sets × 12 reps",
+          "Push-Ups — 3 × 12",
+          "Bodyweight Squat — 3 × 15",
+          "Band Row / Inverted Row — 3 × 12",
           "Core work — 3 sets",
         ],
         rest: "45–60 sec",
         progression: "Increase pace or total reps week to week.",
-        substitutions: [
-          "Jog → brisk walk",
-          "Band Row → backpack row",
-        ],
+        substitutions: ["Jog → brisk walk", "Band Row → backpack row"],
       },
       {
         day: "Friday",
         focus: "Outdoor Full Body",
         warmup: ["Walk 5 min", "Mobility"],
         exercises: [
-          "Split Squat — 3 sets × 10 reps/leg",
-          "Push-Ups — 3 sets × 10–12 reps",
+          "Split Squat — 3 × 10 / leg",
+          "Push-Ups — 3 × 10–12",
           "Pull-Up / Row variation — 3 sets",
           "Hill walk — 15 min",
-          "Leg Raises — 3 sets × 15 reps",
+          "Leg Raises — 3 × 15",
         ],
         rest: "45–60 sec",
         progression: "Add quality before intensity.",
-        substitutions: [
-          "Pull-Up variation → inverted row",
-          "Hill walk → flat walk",
-        ],
+        substitutions: ["Pull-Up variation → inverted row", "Hill walk → flat walk"],
       },
     ],
     health: [
@@ -761,18 +649,15 @@ function buildWorkoutPlan(
         focus: "Outdoor Full Body",
         warmup: ["Walk 5 min", "Mobility"],
         exercises: [
-          "Bodyweight Squat — 3 sets × 10 reps",
-          "Incline Push-Ups — 3 sets × 8–10 reps",
-          "Step-Ups — 3 sets × 10 reps/leg",
-          "Band Row / Towel Row — 3 sets × 10 reps",
+          "Bodyweight Squat — 3 × 10",
+          "Incline Push-Ups — 3 × 8–10",
+          "Step-Ups — 3 × 10 / leg",
+          "Band Row / Towel Row — 3 × 10",
           "Walk — 15 min",
         ],
         rest: "45 sec",
         progression: "Build consistency and easy recovery.",
-        substitutions: [
-          "Incline Push-Ups → wall push-ups",
-          "Band Row → backpack row",
-        ],
+        substitutions: ["Incline Push-Ups → wall push-ups", "Band Row → backpack row"],
       },
       {
         day: "Wednesday",
@@ -785,42 +670,29 @@ function buildWorkoutPlan(
         ],
         rest: "As needed",
         progression: "Increase distance or frequency.",
-        substitutions: [
-          "Brisk walk → bike ride",
-        ],
+        substitutions: ["Brisk walk → bike ride"],
       },
       {
         day: "Friday",
         focus: "Outdoor Strength + Conditioning",
         warmup: ["Walk 5 min", "Mobility"],
         exercises: [
-          "Walking Lunges — 3 sets × 10 reps/leg",
-          "Push-Ups — 3 sets × 8–10 reps",
-          "Bodyweight Squat — 3 sets × 12 reps",
-          "Bench step-ups — 3 sets × 10 reps/leg",
+          "Walking Lunges — 3 × 10 / leg",
+          "Push-Ups — 3 × 8–10",
+          "Bodyweight Squat — 3 × 12",
+          "Bench step-ups — 3 × 10 / leg",
           "Walk — 15 min",
         ],
         rest: "45 sec",
         progression: "Add reps and total time gradually.",
-        substitutions: [
-          "Walking Lunges → split squats",
-          "Push-Ups → incline push-ups",
-        ],
+        substitutions: ["Walking Lunges → split squats", "Push-Ups → incline push-ups"],
       },
     ],
   };
 
-  let plan = gymFatLoss;
-  if (trainingMode === "gym") {
-    if (goal === "fat_loss") plan = gymFatLoss;
-    if (goal === "muscle_gain") plan = gymMuscle;
-    if (goal === "recomposition") plan = gymRecomp;
-    if (goal === "health") plan = gymHealth;
-  } else if (trainingMode === "home") {
-    plan = homeBase[goal];
-  } else {
-    plan = outdoorBase[goal];
-  }
+  let plan = gymPlans[goal];
+  if (trainingMode === "home") plan = homePlans[goal];
+  if (trainingMode === "outdoor") plan = outdoorPlans[goal];
 
   if (workoutsPerWeek <= 2) return plan.slice(0, 2);
   if (workoutsPerWeek === 3) return plan;
@@ -839,9 +711,7 @@ function buildWorkoutPlan(
         ],
         rest: "Easy pace",
         progression: "Add time gradually without hurting recovery.",
-        substitutions: [
-          "Zone 2 cardio → brisk walk / bike / easy jog",
-        ],
+        substitutions: ["Zone 2 cardio → brisk walk / bike / easy jog"],
       },
     ];
   }
@@ -1048,24 +918,85 @@ export default function Page() {
   const [form, setForm] = useState<FormState>(defaultForm);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+  const [photoError, setPhotoError] = useState("");
+  const [dnaFile, setDnaFile] = useState<File | null>(null);
 
   const fileLabel = useMemo(() => {
     if (!file) return "No photo selected";
     return `${file.name} (${Math.round(file.size / 1024)} KB)`;
   }, [file]);
 
+  const dnaLabel = useMemo(() => {
+    if (!dnaFile) return "No DNA file selected";
+    return `${dnaFile.name} (${Math.round(dnaFile.size / 1024)} KB)`;
+  }, [dnaFile]);
+
   function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0] ?? null;
-    setFile(f);
+  async function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const picked = e.target.files?.[0] ?? null;
+
+    setPhotoError("");
     setAnalysis(null);
 
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    if (f) setPreviewUrl(URL.createObjectURL(f));
-    else setPreviewUrl(null);
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+
+    if (!picked) {
+      setFile(null);
+      setPreviewUrl(null);
+      return;
+    }
+
+    if (!SUPPORTED_IMAGE_TYPES.includes(picked.type)) {
+      setFile(null);
+      setPreviewUrl(null);
+      setPhotoError("Unsupported format. Use JPG, PNG, WEBP, HEIC or HEIF.");
+      return;
+    }
+
+    if (picked.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+      setFile(null);
+      setPreviewUrl(null);
+      setPhotoError(`Image too large. Max ${MAX_FILE_SIZE_MB}MB.`);
+      return;
+    }
+
+    let processedFile = picked;
+
+    if (picked.type === "image/heic" || picked.type === "image/heif") {
+      try {
+        const converted = await heic2any({
+          blob: picked,
+          toType: "image/jpeg",
+          quality: 0.9,
+        });
+
+        const convertedBlob = Array.isArray(converted) ? converted[0] : converted;
+
+        processedFile = new File(
+          [convertedBlob as Blob],
+          picked.name.replace(/\.(heic|heif)$/i, ".jpg"),
+          { type: "image/jpeg" }
+        );
+      } catch {
+        setFile(null);
+        setPreviewUrl(null);
+        setPhotoError("Could not convert HEIC/HEIF. Try another image or save it as JPG.");
+        return;
+      }
+    }
+
+    setFile(processedFile);
+    setPreviewUrl(URL.createObjectURL(processedFile));
+  }
+
+  function onPickDnaFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const picked = e.target.files?.[0] ?? null;
+    setDnaFile(picked);
   }
 
   async function runAnalysis() {
@@ -1159,7 +1090,6 @@ export default function Page() {
               }}
             >
               {previewUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={previewUrl}
                   alt="Preview"
@@ -1172,7 +1102,7 @@ export default function Page() {
               ) : (
                 <div style={{ textAlign: "center", opacity: 0.72 }}>
                   <div style={{ fontSize: 18, marginBottom: 6 }}>No body photo yet</div>
-                  <div style={{ fontSize: 13 }}>Upload a photo to complete the profile.</div>
+                  <div style={{ fontSize: 13 }}>Upload a clear body photo from phone or computer.</div>
                 </div>
               )}
             </div>
@@ -1185,11 +1115,14 @@ export default function Page() {
                 border: "1px solid rgba(255,255,255,0.12)",
                 background: "rgba(0,0,0,0.20)",
                 cursor: "pointer",
-                marginBottom: 16,
+                marginBottom: 8,
               }}
             >
               <div style={{ fontSize: 13, opacity: 0.82, marginBottom: 8 }}>Body photo</div>
               <div style={{ fontSize: 12, opacity: 0.72, marginBottom: 8 }}>{fileLabel}</div>
+              <div style={{ fontSize: 12, opacity: 0.58, marginBottom: 8 }}>
+                Supported: JPG, PNG, WEBP, HEIC, HEIF · Max {MAX_FILE_SIZE_MB}MB
+              </div>
               <div
                 style={{
                   display: "inline-block",
@@ -1200,10 +1133,71 @@ export default function Page() {
                   fontSize: 13,
                 }}
               >
-                Choose file
+                Choose file / Take photo
               </div>
-              <input type="file" accept="image/*" onChange={onPickFile} style={{ display: "none" }} />
+              <input
+                type="file"
+                accept="image/jpeg,image/jpg,image/png,image/webp,image/heic,image/heif"
+                capture="environment"
+                onChange={onPickFile}
+                style={{ display: "none" }}
+              />
             </label>
+
+            {photoError ? (
+              <div
+                style={{
+                  marginBottom: 16,
+                  padding: "10px 12px",
+                  borderRadius: 12,
+                  background: "rgba(239,68,68,0.14)",
+                  border: "1px solid rgba(239,68,68,0.26)",
+                  color: "#fecaca",
+                  fontSize: 13,
+                }}
+              >
+                {photoError}
+              </div>
+            ) : (
+              <div style={{ marginBottom: 16, fontSize: 12, opacity: 0.55 }}>
+                Next step later: AI check to reject random non-human images.
+              </div>
+            )}
+
+            <div
+              style={{
+                marginBottom: 16,
+                padding: 14,
+                borderRadius: 14,
+                border: "1px solid rgba(255,255,255,0.12)",
+                background: "rgba(0,0,0,0.20)",
+              }}
+            >
+              <div style={{ fontSize: 13, opacity: 0.82, marginBottom: 8 }}>DNA analysis</div>
+              <div style={{ fontSize: 12, opacity: 0.72, marginBottom: 8 }}>{dnaLabel}</div>
+              <div style={{ fontSize: 12, opacity: 0.58, marginBottom: 8 }}>
+                Supported: TXT, CSV, PDF
+              </div>
+              <label
+                style={{
+                  display: "inline-block",
+                  padding: "10px 14px",
+                  borderRadius: 12,
+                  background: "rgba(255,255,255,0.08)",
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: "pointer",
+                }}
+              >
+                Upload DNA file
+                <input
+                  type="file"
+                  accept=".txt,.csv,.pdf"
+                  onChange={onPickDnaFile}
+                  style={{ display: "none" }}
+                />
+              </label>
+            </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Field label="Sex">
@@ -1416,8 +1410,9 @@ export default function Page() {
                 >
                   <h3 style={{ marginTop: 0, marginBottom: 8, fontSize: 18 }}>DNA Personalization</h3>
                   <p style={{ margin: 0, opacity: 0.82, lineHeight: 1.5 }}>
-                    Unlock deeper personalization later by connecting DNA profile data.
-                    This layer can refine nutrient tolerance, recovery emphasis, and training response assumptions.
+                    {dnaFile
+                      ? `DNA file added: ${dnaFile.name}. This layer can later refine nutrient tolerance, recovery emphasis and training-response assumptions.`
+                      : "Upload a DNA report to unlock deeper personalization later. This layer can refine nutrient tolerance, recovery emphasis, and training response assumptions."}
                   </p>
                 </div>
               </div>
